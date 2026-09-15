@@ -19,41 +19,125 @@ import pandas as pd
 # ---------------------------------------------------------------------------
 # 1. Word list / phrase lexicon
 # ---------------------------------------------------------------------------
-# Starter lexicon. Expand this — the "How You Say It Matters" and "Parsing
-# the Fed" papers are good sources for phrases actually used in FOMC text.
-# Positive score = hawkish, negative = dovish.
-HAWKISH_PHRASES = {
-    "higher inflation": 1,
-    "elevated inflation": 1,
-    "inflation remains elevated": 1,
-    "inflation has increased": 1,
-    "further increases": 1,
-    "additional policy firming": 1,
-    "restrictive stance": 1,
-    "tightening": 1,
-    "upside risks to inflation": 1,
-    "strong labor market": 0.5,
-    "robust growth": 0.5,
-    "raise the target range": 1,
-    "warrant additional": 1,
+# Organized by category so it's auditable and easy to extend. Weights are on
+# roughly a [-2, 2] scale (magnitude = how strongly hawkish/dovish); the
+# score_wordlist() function further weights by phrase length (in words), so
+# longer, more specific phrases count more than single common words.
+#
+# Sourced from: the standard vocabulary the FOMC has actually used across
+# statements/minutes 2018-2026 (rate path, inflation outlook, labor market,
+# balance sheet/QE, risk-balance language, forward-guidance certainty), plus
+# the "Parsing the Fed" reference deck and Doh, Kim, Yang (2021).
+#
+# You should still spot-check this against a few of your own scraped
+# statements — pull a clearly hawkish one (e.g. a 2022 hike statement) and a
+# clearly dovish one (e.g. March 2020) from docs_df and skim for phrases
+# this list is missing.
+
+RATE_PATH_PHRASES = {
+    # hawkish: tightening / more hikes
+    "raise the target range": 1.5,
+    "increase in the target range": 1.0,
+    "further increases in the target range": 1.5,
+    "additional policy firming": 1.5,
+    "additional gradual increases": 1.0,
+    "warrant additional increases": 1.5,
+    "restrictive stance of monetary policy": 1.5,
+    "higher for longer": 1.5,
+    "hike": 0.5,
+    # dovish: cutting / easing
+    "lower the target range": -1.5,
+    "decrease in the target range": -1.0,
+    "cut the target range": -1.5,
+    "ease the stance of monetary policy": -1.5,
+    "gradual adjustments in the stance": -0.3,
+    "will not hesitate to act": -0.5,
+    "act as appropriate to sustain the expansion": -1.0,
+    "exceptionally low levels": -1.5,
 }
 
-DOVISH_PHRASES = {
-    "inflation has eased": -1,
-    "inflation has declined": -1,
-    "inflation is easing": -1,
-    "moderating inflation": -1,
-    "softening labor market": -1,
-    "labor market has cooled": -1,
-    "downside risks to growth": -1,
-    "accommodative": -1,
-    "lower the target range": -1,
-    "supportive of economic activity": -0.5,
-    "gradual adjustments": -0.3,
-    "patient approach": -0.5,
+INFLATION_PHRASES = {
+    # hawkish
+    "elevated inflation": 1.0,
+    "inflation remains elevated": 1.2,
+    "inflation remains too high": 1.5,
+    "upside risks to inflation": 1.2,
+    "inflation has increased": 1.0,
+    "persistently high inflation": 1.5,
+    "vigilant to inflation risks": 1.2,
+    "strongly committed to returning inflation": 1.0,
+    # dovish
+    "inflation has eased": -1.2,
+    "inflation has declined": -1.0,
+    "inflation is easing": -1.2,
+    "moderating inflation": -1.0,
+    "inflation is moving sustainably toward": -1.2,
+    "inflation has come down": -1.0,
+    "muted inflation pressures": -1.0,
+    "below the committee's longer-run objective": -0.8,
 }
 
-WORD_LIST = {**HAWKISH_PHRASES, **DOVISH_PHRASES}
+LABOR_MARKET_PHRASES = {
+    # hawkish (strong/tight labor market -> supports tightening)
+    "strong job gains": 0.8,
+    "robust pace": 0.5,
+    "tight labor market": 1.0,
+    "labor market remains tight": 1.0,
+    "job gains have been robust": 0.8,
+    # dovish (weakening labor market -> supports easing)
+    "labor market conditions have eased": -1.0,
+    "job gains have slowed": -1.0,
+    "softening labor market": -1.2,
+    "labor market has cooled": -1.2,
+    "downside risks to employment": -1.0,
+    "unemployment rate has moved up": -0.8,
+    "layoffs": -0.5,
+}
+
+GROWTH_ACTIVITY_PHRASES = {
+    "robust growth": 0.8,
+    "economic activity has been expanding at a solid pace": 0.5,
+    "growth of economic activity has moderated": -0.8,
+    "economic activity has weakened": -1.2,
+    "downside risks to growth": -1.0,
+    "weigh heavily on economic activity": -1.5,
+    "considerable risks to the economic outlook": -1.0,
+}
+
+BALANCE_SHEET_PHRASES = {
+    # hawkish: shrinking balance sheet (QT)
+    "reduce the size of the federal reserve's balance sheet": 1.2,
+    "reducing its holdings": 1.0,
+    "resumed reducing": 1.0,
+    "continuing to reduce": 1.0,
+    # dovish: growing balance sheet (QE)
+    "increase its holdings": -1.2,
+    "expand its holdings": -1.2,
+    "large-scale asset purchases": -1.0,
+    "purchase additional": -1.0,
+}
+
+RISK_AND_CERTAINTY_PHRASES = {
+    # hawkish-leaning certainty / hawkish risk framing
+    "committee judges that risks are weighted toward higher inflation": 1.2,
+    "additional firming may be appropriate": 1.2,
+    # dovish-leaning uncertainty / dovish risk framing
+    "increased uncertainty about the economic outlook": -0.8,
+    "highly accommodative": -1.2,
+    "supportive of economic activity": -0.8,
+    "patient in assessing": -0.8,
+    "will act as appropriate": -0.5,
+    "prepared to adjust the stance": -0.5,
+}
+
+WORD_LIST = {
+    **RATE_PATH_PHRASES,
+    **INFLATION_PHRASES,
+    **LABOR_MARKET_PHRASES,
+    **GROWTH_ACTIVITY_PHRASES,
+    **BALANCE_SHEET_PHRASES,
+    **RISK_AND_CERTAINTY_PHRASES,
+}
 
 
 def score_wordlist(text: str, lexicon: dict[str, float] = None) -> float:

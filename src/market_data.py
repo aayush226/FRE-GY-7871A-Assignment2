@@ -54,8 +54,18 @@ def get_fred_csv(series_id: str, start: str, end: str) -> pd.Series:
 def get_yahoo_series(ticker: str, start: str, end: str) -> pd.Series:
     if yf is None:
         raise ImportError("pip install yfinance")
-    df = yf.download(ticker, start=start, end=end, progress=False)
-    return df["Close"].rename(ticker)
+    df = yf.download(ticker, start=start, end=end, progress=False, auto_adjust=True)
+
+    # Newer yfinance versions can return MultiIndex columns (field, ticker)
+    # even for a single ticker, depending on version — handle both shapes.
+    if isinstance(df.columns, pd.MultiIndex):
+        close = df["Close"]
+        if isinstance(close, pd.DataFrame):
+            close = close.iloc[:, 0]
+    else:
+        close = df["Close"]
+
+    return close.rename(ticker)
 
 
 def build_indicator_panel(start: str, end: str, fred_api_key: str | None = None) -> pd.DataFrame:

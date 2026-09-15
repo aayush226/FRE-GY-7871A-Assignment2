@@ -38,6 +38,7 @@ if IN_COLAB:
     # torch here: pip installing it fresh can silently replace Colab's
     # GPU-enabled build with one that doesn't match the runtime's CUDA
     # version, which would push you back onto CPU without any error.
+    !pip install -q -U pillow
     !pip install -q beautifulsoup4 yfinance fredapi pdfplumber tqdm transformers statsmodels
 
     import torch
