@@ -12,6 +12,8 @@ Requires: pandas_datareader OR a direct FRED API key, and yfinance.
 Run with normal internet access (not this sandboxed container).
 """
 
+import re
+
 import pandas as pd
 
 try:
@@ -94,16 +96,45 @@ def build_indicator_panel(start: str, end: str, fred_api_key: str | None = None)
     return panel
 
 
-def one_day_change(panel: pd.DataFrame, event_date: str) -> dict:
+def _parse_release_hour(release_time: str | None) -> int | None:
+    """Parse a string like '2:00 p.m.' or '10:00 a.m.' into a 24-hour int
+    hour. Returns None if unparseable/missing."""
+    if not release_time:
+        return None
+    m = re.search(r"(\d{1,2}):?(\d{2})?\s*([ap])\.?m\.?", release_time, re.IGNORECASE)
+    if not m:
+        return None
+    hour = int(m.group(1))
+    is_pm = m.group(3).lower() == "p"
+    if is_pm and hour != 12:
+        hour += 12
+    if not is_pm and hour == 12:
+        hour = 0
+    return hour
+
+
+def one_day_change(panel: pd.DataFrame, event_date: str, release_time: str | None = None,
+                    after_hours_cutoff_hour: int = 16) -> dict:
     """Given the indicator panel and a release date, compute the change from
     the prior trading day's close to this trading day's close (or next
-    available trading day if event_date isn't itself a trading day —
-    relevant for speeches/testimony released after market close).
+    available trading day if event_date isn't itself a trading day).
+
+    If release_time is given and parses to an hour at or after
+    after_hours_cutoff_hour (default 4pm, i.e. after market close),
+    the event is treated as happening on the NEXT trading day instead —
+    the market can't react same-day to something it hasn't heard yet.
+    This matters most for speeches/testimony, which (unlike statements,
+    minutes, and press conferences, all consistently 2:00-2:30pm ET) can
+    happen at any hour, including evening dinner keynotes.
     """
     idx = panel.index
     event_ts = pd.Timestamp(event_date)
 
-    # trading day on/after the event
+    hour = _parse_release_hour(release_time)
+    if hour is not None and hour >= after_hours_cutoff_hour:
+        event_ts = event_ts + pd.Timedelta(days=1)
+
+    # trading day on/after the (possibly shifted) event
     after = idx[idx >= event_ts]
     if len(after) == 0:
         return {}

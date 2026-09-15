@@ -124,7 +124,7 @@ for d in speech_docs:
         'speaker': d.speaker,
         'meeting_date': None,
         'release_date': d.release_date,
-        'release_time': '',
+        'release_time': d.release_time,
         'url': d.url,
         'text': d.text,
     })
@@ -176,15 +176,19 @@ scored_df[['release_date', 'doc_type', 'chair', 'wordlist_score', 'finbert_score
 md("""### Figure 1: Hawkish/dovish tone over time by document type
 Warsh's term start (2026-05-22) marked with a vertical line.""")
 
-code("""fig, ax = plt.subplots(figsize=(12, 5))
+code("""fig, axes = plt.subplots(2, 1, figsize=(12, 9), sharex=True)
+
 for doc_type, grp in scored_df.dropna(subset=['release_date']).groupby('doc_type'):
     grp = grp.sort_values('release_date')
-    ax.plot(pd.to_datetime(grp['release_date']), grp['finbert_score'], marker='o', label=doc_type, alpha=0.7)
+    axes[0].plot(pd.to_datetime(grp['release_date']), grp['finbert_score'], marker='o', label=doc_type, alpha=0.7)
+    axes[1].plot(pd.to_datetime(grp['release_date']), grp['wordlist_score'], marker='o', label=doc_type, alpha=0.7)
 
-ax.axvline(pd.Timestamp('2026-05-22'), color='red', linestyle='--', label='Warsh sworn in')
-ax.set_title('FOMC Communication Tone Over Time (FinBERT sentiment)')
-ax.set_ylabel('Tone score (+ hawkish / - dovish)')
-ax.legend()
+for ax, title in zip(axes, ['FinBERT sentiment', 'Word list']):
+    ax.axvline(pd.Timestamp('2026-05-22'), color='red', linestyle='--', label='Warsh sworn in')
+    ax.set_title(f'FOMC Communication Tone Over Time ({title})')
+    ax.set_ylabel('Tone score (+ hawkish / - dovish)')
+    ax.legend()
+
 plt.tight_layout()
 plt.savefig('../outputs/figure1_tone_over_time.png', dpi=150)
 plt.show()
@@ -209,10 +213,13 @@ panel.to_csv('../data/market_indicator_panel.csv')
 panel.tail()
 """)
 
-code("""# Compute one-day changes for every scored document's release date
+code("""# Compute one-day changes for every scored document's release date. Passing
+# release_time lets after-hours events (mainly speeches/testimony, which
+# unlike statements/minutes/press conferences aren't always 2-2:30pm ET) get
+# credited to the next trading day instead of the same day.
 change_rows = []
 for _, row in scored_df.dropna(subset=['release_date']).iterrows():
-    changes = market_data.one_day_change(panel, row['release_date'])
+    changes = market_data.one_day_change(panel, row['release_date'], release_time=row.get('release_time'))
     if not changes:
         continue
     change_rows.append({**row.to_dict(), **changes})
@@ -225,7 +232,7 @@ market_df.shape
 md("""### Table 2: One-day changes after each Warsh-era release, next to tone scores""")
 
 code("""table2 = market_df[market_df['chair'] == 'warsh'][
-    ['release_date', 'doc_type', 'wordlist_score', 'finbert_score',
+    ['release_date', 'doc_type', 'wordlist_score', 'finbert_score', 'rate_factor', 'inflation_factor',
      'd_dxy', 'd_t10y2y', 'd_dgs1', 'd_growth_value']
 ].sort_values('release_date')
 table2

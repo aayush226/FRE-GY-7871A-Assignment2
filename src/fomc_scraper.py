@@ -40,6 +40,11 @@ PRESSCONF_PDF_URL = BASE + "/mediacenter/files/FOMCpresconf{date}.pdf"
 
 DATE_RE = re.compile(r"(monetary|fomcminutes)(\d{8})")
 
+# The assignment specifies "from February 2018" as the baseline. Powell was
+# sworn in Feb 5, 2018; the Jan 31, 2018 meeting was still chaired by Janet
+# Yellen. Filter it (and anything before it) out.
+SAMPLE_START_DATE = "2018-02-01"
+
 
 @dataclass
 class FomcDocument:
@@ -112,6 +117,7 @@ def discover_meeting_dates(years: list[int]) -> list[str]:
         except Exception as e:
             print(f"  [warn] could not fetch {CALENDAR_URL}: {e}")
 
+    dates = {d for d in dates if d >= SAMPLE_START_DATE}
     return sorted(dates)
 
 
@@ -192,14 +198,20 @@ def fetch_minutes(meeting_date: str, release_date_override: str | None = None) -
     """meeting_date: 'YYYY-MM-DD'. Fetches the minutes (released ~3 weeks later).
     Pass release_date_override (from discover_minutes_release_dates()) to get
     the correct release date — the minutes page itself doesn't reliably state
-    it, so leaving this unset will likely leave release_date blank."""
+    it, so leaving this unset will likely leave release_date blank.
+
+    Release time: FOMC minutes are, by long-standing and consistently
+    documented Fed convention, always released at 2:00 p.m. ET (confirmed
+    across minutes press releases spanning 2009-2026) — this is hardcoded
+    rather than scraped, since the minutes page itself doesn't state it.
+    """
     yyyymmdd = meeting_date.replace("-", "")
     url = MINUTES_URL.format(date=yyyymmdd)
     resp = _get(url)
     soup = BeautifulSoup(resp.text, "html.parser")
 
     text = _extract_main_article_text(soup)
-    release_date, release_time = _extract_release_datetime(resp.text)
+    release_date, _ = _extract_release_datetime(resp.text)
     if not release_date and release_date_override:
         release_date = release_date_override
 
@@ -207,17 +219,19 @@ def fetch_minutes(meeting_date: str, release_date_override: str | None = None) -
         doc_type="minutes",
         meeting_date=meeting_date,
         release_date=release_date or "",
-        release_time=release_time or "",
+        release_time="2:00 p.m.",
         url=url,
         text=text,
     )
 
 
 def _extract_statement_text_and_time(soup: BeautifulSoup) -> tuple[str, str]:
-    """Statements have a 'For release at H:MM p.m. EST/EDT' line near the top."""
+    """Statements have a 'For release at H:MM p.m. EST/EDT' line near the top.
+    Fall back to the well-established Fed convention (2:00 p.m.) if the
+    regex doesn't match some particular page's exact wording."""
     text = _extract_main_article_text(soup)
     m = re.search(r"For (?:immediate )?release at ([\d:]+\s*[ap]\.m\.[^\n]*)", text)
-    release_time = m.group(1).strip() if m else ""
+    release_time = m.group(1).strip() if m else "2:00 p.m."
     return text, release_time
 
 
@@ -260,6 +274,13 @@ def fetch_press_conference(meeting_date: str) -> FomcDocument:
     the March/June/Sept/Dec meetings had them before 2019, after which
     every meeting got one). A 404 here just means that meeting had no
     press conference — same as the minutes 404s you've already seen.
+
+    Release time hardcoded to 2:30 p.m. ET — the Fed's standard convention
+    (confirmed via live coverage of the Sept 2026 meeting: "policy decision
+    at 2 pm... typically followed by the Fed chair's press conference at
+    2:30 pm, though this could change under Warsh's leadership"). There's
+    no per-meeting way to detect an actual deviation from this, so treat it
+    as an approximation, particularly for Warsh-era meetings.
     """
     import pdfplumber  # local import so the rest of the module works
                         # even if pdfplumber isn't installed yet
