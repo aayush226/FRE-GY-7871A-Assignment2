@@ -54,7 +54,15 @@ def get_fred_csv(series_id: str, start: str, end: str) -> pd.Series:
 def get_yahoo_series(ticker: str, start: str, end: str) -> pd.Series:
     if yf is None:
         raise ImportError("pip install yfinance")
-    df = yf.download(ticker, start=start, end=end, progress=False, auto_adjust=True)
+
+    # yfinance's `end` is EXCLUSIVE (returns data strictly before that date),
+    # unlike FRED's, which is inclusive. Push it forward one day so a
+    # requested end date actually shows up in the result instead of being
+    # silently dropped — this matters most for the most recent day(s),
+    # which is exactly what the Step 4 forecast needs.
+    end_inclusive = (pd.Timestamp(end) + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
+
+    df = yf.download(ticker, start=start, end=end_inclusive, progress=False, auto_adjust=True)
 
     # Newer yfinance versions can return MultiIndex columns (field, ticker)
     # even for a single ticker, depending on version — handle both shapes.
