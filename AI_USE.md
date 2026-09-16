@@ -1,29 +1,56 @@
 # AI Use Disclosure
 
-This project used Claude (Anthropic) as a coding assistant during development.
-Fill in / edit this file honestly before submitting — it should reflect what
-you actually used, not this template verbatim.
+Author: Aayush Shah
+
+This project used Claude (Anthropic) as a coding and research assistant
+throughout development, working interactively in a chat session.
 
 ## What AI was used for
-- Scaffolding the project structure (scraper modules, notebook skeleton).
-- Identifying the correct federalreserve.gov URL patterns for FOMC
-  statements, minutes, and speeches (verified against live pages during
-  development).
-- Drafting the word-list lexicon starting point and FinBERT scoring
-  functions, based on the methodology in the "Parsing the Fed" reference
-  deck and Doh, Kim, Yang (2021) / Doh, Song, Yang (2020, 2023).
-- [Add: any help with regression setup, debugging, report drafting, etc.]
+- Helping me figure out the the full scraper (statements, minutes, press
+  conference transcripts, speeches, and testimony) against
+  federalreserve.gov, including discovering the correct URL patterns and
+  listing-page structures through iterative debugging.
+- Editing the tone-scoring code I wrote(word list lexicon, FinBERT sentiment,
+  FinBERT factor similarity), based on the methodology described in the
+  "Parsing the Fed" reference deck, since the Doh et al. papers' method
+  (comparing to declassified alternative FOMC statements) isn't usable
+  for this 2018-2026 sample (alternative statements are only public
+  through Dec 2014).
+- Writing the market-data pipeline (FRED/Yahoo Finance) and the
+  regression code for Table 3.
+- Debugging real bugs found during development, including: a yfinance
+  API version change that broke market data collection; an off-by-one
+  in yfinance's exclusive end-date handling; a chair-tagging bug caused
+  by pandas converting missing values to NaN; a missing release-time
+  field for FOMC minutes; and — the largest gap — that testimony
+  documents live at a different URL path than regular speeches
+  (/newsevents/testimony/ vs /newsevents/speech/), which an earlier
+  version of the scraper silently missed entirely.
+- Searching for and summarizing real-time market context for the
+  September 2026 forecast (CME FedWatch probabilities, a Duke/WSJ survey
+  of former Fed officials, and live market commentary), used as an input
+  to the forecast alongside the model's own regression output.
+- Drafting an initial version of the "Comparison with the readings"
+  section and the Step 4 forecast, using the notebook's actual output
+  numbers, which I then reviewed and adjusted.
 
-## What was NOT AI-generated / required human judgment
-- Actual execution of the scraper and verification of collected data
-  (the AI assistant's environment could not reach federalreserve.gov, FRED,
-  or Yahoo Finance directly, so all live data collection was run and
-  checked locally by [your name]).
-- Expanding/curating the hawkish-dovish word list beyond the starter set.
-- Interpreting regression results and forming the September forecast and
-  recommendation.
-- All final analysis, writing, and conclusions in the submitted report.
+## What was NOT AI-generated / required my own judgment
+- Most of the code cells were initially written by me which the AI then
+  edited bsaed on bugs found in the code. 
+- Actually executing the notebook (in Google Colab, using a GPU runtime),
+  verifying outputs at each step, and catching cases where results looked
+  wrong or inconsistent.
+- Expanding the word-list lexicon from the initial starter set.
+- The specific probabilities and expected-magnitude estimates in the
+  final forecast, and the recommendation and falsification condition —
+  these are my own conclusions, informed by but not dictated by the
+  regression output and the AI's suggestions.
+- Requesting and directing the methodology audit against the assignment
+  text before finalizing, which surfaced several of the fixes listed
+  above.
+- All final review, editing, and submission of this report and the
+  accompanying notebook.
 
-## Specific prompts / sessions
-[Optional: link or summarize the conversation(s) used, per your instructor's
-requirements.]
+## Model
+Claude Sonnet 4.5, via claude.ai, over multiple sessions during
+September 2026.
